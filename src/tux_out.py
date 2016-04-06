@@ -19,18 +19,19 @@ factory = song_man.getFactory()
 
 song = song_man.newSong()
 measure = track_man.getFirstMeasure(song.getTrack(0))
-beat = factory.newBeat()
+
+inp = TGInputStream()
+inp.init(song_man.getFactory(), BufferedInputStream(FileInputStream(File('Untitled.tg'))))
+
+song2 = inp.readSong()
+measure2 = track_man.getFirstMeasure(song2.getTrack(0))
+beat2 = meas_man.getFirstBeat(measure2.getBeats())
+print beat2.getVoice(0).getNote(0).getVelocity()
+beat = beat2.clone(song_man.getFactory())
+
 meas_man.addBeat(measure, beat)
 
-# inp = TGInputStream()
-# inp.init(song_manager.getFactory(), BufferedInputStream(FileInputStream(File('Untitled.tg'))))
+# out = TGOutputStream()
+# out.init(song_man.getFactory(), BufferedOutputStream(FileOutputStream(File('foo.tg'))))
 
-# song = inp.readSong()
-# print song.getTrack(0).stringCount()
-# print song.getTrack(0).getMeasure(0).countBeats()
-
-
-out = TGOutputStream()
-out.init(song_man.getFactory(), BufferedOutputStream(FileOutputStream(File('foo.tg'))))
-
-out.writeSong(song)
+# out.writeSong(song)
