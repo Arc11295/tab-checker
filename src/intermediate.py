@@ -1,3 +1,4 @@
+from string import Template
 from types import IntType
 
 class Song(object):
@@ -30,26 +31,59 @@ class Song(object):
 
     def lily_str(self):
         """Return the entire song in LilyPond syntax as a string."""
-        str_list = ["music = {\n  "]
-        str_list += [self.lilypondify(i)+" " for i in xrange(self.num_notes())]
-        str_list.append("\n}\n\\score{\n  ")
-        if self._tab and self._std:
-            str_list.append("\\new StaffGroup ")
-        str_list.append("<<\n  ")
+        # str_list = ["music = {\n  "]
+        # str_list += [self.lilypondify(i)+" " for i in xrange(self.num_notes())]
+        # str_list.append("\n}\n\\score{\n  ")
+        # if self._tab and self._std:
+        #     str_list.append("\\new StaffGroup ")
+        # str_list.append("<<\n  ")
+        # if self._std:
+        #     str_list.append("  \\new Staff{\\music}\n  ")
+        # if self._tab:
+        #     str_list.append("  \\new TabStaff{\\music}\n  ")
+        # str_list.append(">>\n\n")
+
+        # if self._tab or self._std:
+        #     str_list.append("  \\layout{}\n")
+        # if self._midi:
+        #     str_list.append("  \\midi{}\n")
+
+        # str_list.append("}")
+
+        # return "".join(str_list)
+        subs = {}
+
+        if self._std and self._tab:
+            subs["STAFFGROUP"] = "\\new StaffGroup "
+            subs["LAYOUT"] = "\\layout{}"
+        else:
+            subs["STAFFGROUP"] = ""
+            if self._std or self._tab:
+                subs["LAYOUT"] = "\\layout{}"
+            else:
+                subs["LAYOUT"] = ""
+
         if self._std:
-            str_list.append("  \\new Staff{\\music}\n  ")
+            subs["STAFF"] = "\\new Staff{\\music}"
+        else:
+            subs["STAFF"] = ""
         if self._tab:
-            str_list.append("  \\new TabStaff{\\music}\n  ")
-        str_list.append(">>\n\n")
+            subs["TABSTAFF"] = "\\new TabStaff{\\music}"
+        else:
+            subs["TABSTAFF"] = ""
 
-        if self._tab or self._std:
-            str_list.append("  \\layout{}\n")
         if self._midi:
-            str_list.append("  \\midi{}\n")
+            subs["MIDI"] = "\\midi{}"
+        else:
+            subs["MIDI"] = ""
 
-        str_list.append("}")
+        note_list = [self.lilypondify(i)+" " for i in xrange(self.num_notes())]
+        subs["NOTES"] = "".join(note_list)
 
-        return "".join(str_list)
+        f = open("template.ly")
+        temp_str = f.read()
+        f.close()
+        return Template(temp_str).substitute(subs)
 
     def lilypondify(self, index):
         """Return the pitch of a note in LilyPond syntax.
@@ -87,7 +121,7 @@ class Note(object):
 
     values = (1, 2, 4, 8, 16, 32, 64)
 
-    def __init__(self, fret, string, duration, dotted):
+    def __init__(self, fret, string, duration, dotted=False):
         assert type(fret) is IntType
         assert type(string) is IntType
         assert string > 0
