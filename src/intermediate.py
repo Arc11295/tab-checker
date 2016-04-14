@@ -13,11 +13,12 @@ class Song(object):
         ("c", "cis", "d", "dis", "e", "f", "fis", "g", "gis", "a", "ais", "b")
 
 
-    def __init__(self, tab=True, midi=False, standard=False):
+    def __init__(self, tab=True, pdf=True, midi=False, standard=False):
         self._notes = []
         self._tuning = (64, 59, 55, 50, 45, 40)
-        self._midi = midi
         self._tab = tab
+        self._pdf = pdf
+        self._midi = midi
         self._std = standard
 
     def add_note(self, note):
@@ -55,13 +56,9 @@ class Song(object):
 
         if self._std and self._tab:
             subs["STAFFGROUP"] = "\\new StaffGroup "
-            subs["LAYOUT"] = "\\layout{}"
         else:
             subs["STAFFGROUP"] = ""
-            if self._std or self._tab:
-                subs["LAYOUT"] = "\\layout{}"
-            else:
-                subs["LAYOUT"] = ""
+
 
         if self._std:
             subs["STAFF"] = "\\new Staff{\\music}"
@@ -72,6 +69,10 @@ class Song(object):
         else:
             subs["TABSTAFF"] = ""
 
+        if self._pdf:
+            subs["LAYOUT"] = "\\layout{}"
+        else:
+            subs["LAYOUT"] = ""
         if self._midi:
             subs["MIDI"] = "\\midi{}"
         else:

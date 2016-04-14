@@ -8,5 +8,5 @@ music = {
   >>
 
   \layout{}
-  
+  \midi{}
 }
