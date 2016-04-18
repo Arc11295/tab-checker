@@ -1,11 +1,7 @@
-music = {
-  $NOTES
-}
+$NOTE_BLOCKS
+
 \score{
-  $STAFFGROUP<<
-    $STAFF
-    $TABSTAFF
-  >>
+  $STAVES
 
   $LAYOUT
   $MIDI

@@ -1,9 +1,10 @@
+from __future__ import print_function
 from string import Template
 from types import IntType
 
 class Song(object):
 
-    _C_2 = 48
+    C_2 = 48
     # Just trust me on this one, ok? It has to do with MIDI numbers and
     # the fact that LilyPond takes plain note names to mean notes in
     # the octave BELOW middle C, so we need some constant, and MIDI
@@ -13,61 +14,21 @@ class Song(object):
         ("c", "cis", "d", "dis", "e", "f", "fis", "g", "gis", "a", "ais", "b")
 
 
-    def __init__(self, tab=True, pdf=True, midi=False, standard=False):
-        self._notes = []
-        self._tuning = (64, 59, 55, 50, 45, 40)
-        self._tab = tab
+    def __init__(self, pdf=True, midi=False):
+        self._staves = []
         self._pdf = pdf
         self._midi = midi
-        self._std = standard
 
-    def add_note(self, note):
-        """Add a note to the end of this song."""
-        assert type(note) is Note
-        self._notes.append(note)
+    def add_staff(self, staff):
+        assert type(staff) is Staff
+        self._staves.append(staff)
 
-    def num_notes(self):
-        """Return the number of notes in this song."""
-        return len(self._notes)
+    def num_staves(self):
+        return len(self._staves)
 
     def lily_str(self):
         """Return the entire song in LilyPond syntax as a string."""
-        # str_list = ["music = {\n  "]
-        # str_list += [self.lilypondify(i)+" " for i in xrange(self.num_notes())]
-        # str_list.append("\n}\n\\score{\n  ")
-        # if self._tab and self._std:
-        #     str_list.append("\\new StaffGroup ")
-        # str_list.append("<<\n  ")
-        # if self._std:
-        #     str_list.append("  \\new Staff{\\music}\n  ")
-        # if self._tab:
-        #     str_list.append("  \\new TabStaff{\\music}\n  ")
-        # str_list.append(">>\n\n")
-
-        # if self._tab or self._std:
-        #     str_list.append("  \\layout{}\n")
-        # if self._midi:
-        #     str_list.append("  \\midi{}\n")
-
-        # str_list.append("}")
-
-        # return "".join(str_list)
         subs = {}
-
-        if self._std and self._tab:
-            subs["STAFFGROUP"] = "\\new StaffGroup "
-        else:
-            subs["STAFFGROUP"] = ""
-
-
-        if self._std:
-            subs["STAFF"] = "\\new Staff{\\music}"
-        else:
-            subs["STAFF"] = ""
-        if self._tab:
-            subs["TABSTAFF"] = "\\new TabStaff{\\music}"
-        else:
-            subs["TABSTAFF"] = ""
 
         if self._pdf:
             subs["LAYOUT"] = "\\layout{}"
@@ -78,44 +39,107 @@ class Song(object):
         else:
             subs["MIDI"] = ""
 
-        note_list = [self.lilypondify(i)+" " for i in xrange(self.num_notes())]
-        subs["NOTES"] = "".join(note_list)
+        blocks = [staff.notes_str(i) for i, staff in enumerate(self._staves)]
+        subs["NOTE_BLOCKS"] = "".join(blocks)
+        staves = [staff.staff_str(i) for i, staff in enumerate(self._staves)]
+        subs["STAVES"] = "".join(staves)
 
         f = open("template.ly")
         temp_str = f.read()
         f.close()
         return Template(temp_str).substitute(subs)
 
-    def lilypondify(self, index):
-        """Return the pitch of a note in LilyPond syntax.
 
-        Keyword arguments:
-        index -- the position in this song of the note to lilypondify
-        """
-        note = self._notes[index]
+class Staff(object):
 
-        pitch = self._pitchify(note)
-        octave = (pitch - Song._C_2)/12 # This is why we need _C_2
-        degree = pitch % 12 # C is 0, B is 11.
-        name = Song.lilypond_notes[degree] # The note's letter name
+    def __init__(self, tab=True, standard=False):
+        self._notes = []
+        self._tuning = (64, 59, 55, 50, 45, 40)
+        self._tab = tab
+        self._std = standard
 
-        duration = note.get_duration()
-        suff_list = [str(duration)]
-        if note.is_dotted():
-            suff_list.append(".")
-        if self._tab:
-            string = note.get_string()
-            suff_list.append("\\"+str(string))
-        suffix = "".join(suff_list)
+    def add_note(self, note):
+        """Add a note to the end of this staff."""
+        self._notes.append(note)
 
-        if octave < 0:
-            return name + abs(octave)*"," + suffix
+    def add_notes(self, notes):
+        """Add multiple notes to the end of this staff."""
+        self._notes.extend(notes)
+
+    def num_notes(self):
+        """Return the number of notes in this staff."""
+        return len(self._notes)
+
+    def staff_str(self, index):
+        ascii_A = ord("A")
+        subs = {}
+
+        if self._std and self._tab:
+            subs["STAFFGROUP"] = "\\new StaffGroup "
         else:
-            return name + octave*"'" + suffix
+            subs["STAFFGROUP"] = ""
 
-    def _pitchify(self, note):
-        string = note.get_string() - 1
-        return self._tuning[string] + note.get_fret()
+        if self._std:
+            subs["STAFF"] = "\\new Staff{\\transpose c c' {\\music%c}}"%(index + ascii_A)
+        else:
+            subs["STAFF"] = ""
+        if self._tab:
+            subs["TABSTAFF"] = "\\new TabStaff{\\music%c}"%(index + ascii_A)
+        else:
+            subs["TABSTAFF"] = ""
+
+        f = open("staff_template.ly")
+        temp_str = f.read()
+        f.close()
+        return Template(temp_str).substitute(subs)
+
+    def notes_str(self, index):
+        ascii_A = ord("A")
+        subs = {}
+
+        subs["MUSIC"] = "music%c"%(index + ascii_A)
+        note_list = [n.lilypondify(self._tuning)+" " for n in self._notes]
+        subs["NOTES"] = "".join(note_list)
+
+        f = open("notes_template.ly")
+        temp_str = f.read()
+        f.close()
+        return Template(temp_str).substitute(subs)
+
+
+class Chord(object):
+
+    def __init__(self):
+        self._notes = []
+        self._strings = set()
+
+    def add_note(self, note):
+        assert type(note) is Note
+        string = note.get_string()
+        assert string not in self._strings
+        self._notes.append(note)
+        self._strings.add(string)
+
+    def lilypondify(self, tuning):
+        duration = self._notes[0].get_duration()
+        notes_list = [n.lilypondify(tuning, False)+" " for n in self._notes]
+        return "< " + "".join(notes_list) + ">" + str(duration)
+
+
+class TimeChange(object):
+
+    def __init__(self, top, bottom):
+        self._top = top
+        self._bot = bottom
+
+    def get_top(self):
+        return self._top
+
+    def get_bot(self):
+        return self._bot
+
+    def lilypondify(self, tuning):
+        return "\\time %d/%d"%(self.get_top(), self.get_bot())
 
 
 class Note(object):
@@ -144,6 +168,42 @@ class Note(object):
     def is_dotted(self):
         """Return true if this is a dotted note, false otherwise."""
         return self._data[3]
+
+    def lilypondify(self, tuning, write_duration=True, force_string=True):
+        """Return the pitch of a note in LilyPond syntax.
+
+        """
+        if self.get_fret >= 0:
+            pitch = self._pitchify(tuning)
+            octave = (pitch - Song.C_2)/12 # This is why we need C_2
+            degree = pitch % 12 # C is 0, B is 11.
+            name = Song.lilypond_notes[degree] # The note's letter name
+        else:
+            name = "r" # negative frets correspond to rests here
+            octave = 0 # rests don't really have an octave, but
+            # this way we don't add any ,s or 's after the r
+
+        if write_duration:
+            duration = self.get_duration()
+            suff_list = [str(duration)]
+            if self.is_dotted():
+                suff_list.append(".")
+        else:
+            suff_list = []
+
+        if not name == "r": # a note doesn't really have a string if it's a rest
+            string = self.get_string()
+            suff_list.append("\\"+str(string))
+        suffix = "".join(suff_list)
+
+        if octave < 0:
+            return name + abs(octave)*"," + suffix
+        else:
+            return name + octave*"'" + suffix
+
+    def _pitchify(self, tuning):
+        string = self.get_string() - 1
+        return tuning[string] + self.get_fret()
 
 
 class LilyWriter(object):

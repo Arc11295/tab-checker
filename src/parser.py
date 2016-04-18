@@ -4,28 +4,89 @@ from pyparsing import nums, oneOf, Word, Literal, Suppress, Optional
 from pyparsing import ZeroOrMore, Group, OneOrMore, LineEnd, Keyword
 
 def evalPhrase(s, l, t):
-    duration = 4 #TODO: make this not a magic number
-    dotted = False
-    notes = []
-    string = t.string
+    def fillDuration(duration, dotted):
+        dur = duration
+        dot = dotted
+        notes = []
+        string = t.string
 
-    for n in t[:-1]:
-        if n.duration:
-            duration = n.duration
-            if n.dotted:
-                dotted = True
+        for n in t[:-1]:
+            if n.duration:
+                dur = n.duration
+                if n.dotted:
+                    dot = True
+                else:
+                    dot = False
+            note = ir.Note(n.fret, t.string, dur, dot)
+            notes.append(note)
+
+        return notes, dur, dot
+
+    return fillDuration
+
+def evalIsolatedRest(s, l, t):
+    def fillDuration(duration, dotted):
+        if t[0]:
+            dur = t[0].duration
+            if t[0].dotted:
+                dot = True
             else:
-                dotted = False
-        note = ir.Note(n.fret, t.string, duration, dotted)
-        notes.append(note)
+                dot = False
+        else:
+            dur = duration
+            dot = dotted
 
-    return notes
+        return ir.Note(t.fret, 6, dur, dot)
+
+    return fillDuration
+
+def evalChord(s, l, t):
+    def fillDuration(duration, dotted):
+        if t[0]:
+            dur = t[0].duration
+            if t[0].dotted:
+                dot = True
+            else:
+                dot = False
+        else:
+            dur = duration
+            dot = dotted
+
+        notes = [ir.Note(n.fret, n.string, dur, dot) for n in t[1:]]
+        chord = ir.Chord()
+        for n in notes:
+            chord.add_note(n)
+
+        return [chord], dur, dot
+
+    return fillDuration
+
+def evalTime(s, l, t):
+    def fillDuration(duration, dotted):
+        time = ir.TimeChange(t[0], t[1])
+        return [time], duration, dotted
+
+    return fillDuration
+
+def evalStaff(s, l, t):
+    opts = t[0]
+    staff = ir.Staff(tab=opts.tab[0], standard=opts.std[0])
+    notes = []
+    dur = 4
+    dot = False
+    for f in t[1:]:
+        next_part = f(dur, dot)
+        notes.extend(next_part[0])
+        dur = next_part[1]
+        dot = next_part[2]
+    staff.add_notes(notes)
+    return staff
 
 def evalSong(s, l, t):
     opts = t[0]
-    song = ir.Song(pdf=opts.pdf, midi=opts.midi)
-    for n in t[1:]:
-        song.add_note(n)
+    song = ir.Song(pdf=opts.pdf[0], midi=opts.midi[0])
+    for staff in t[1:]:
+        song.add_staff(staff)
     return song
 
 bool_map = { "true": True, "false": False }
@@ -48,8 +109,13 @@ colon = Literal(":").suppress()
 slash = Literal("/").suppress()
 dash = Literal("-").suppress()
 equals = Literal("=").suppress()
+lparen = Literal("(").suppress()
+rparen = Literal(")").suppress()
 note_start = Keyword("notes").suppress()
-staff_start = Keyword("staff").suppress()
+time_tag = Keyword("time").suppress()
+staff_tag = Keyword("staff").suppress()
+tab_tag = Keyword("tab").suppress()
+std_tag = Keyword("standard").suppress()
 pdf_tag = Keyword("pdf").suppress()
 midi_tag = Keyword("midi").suppress()
 tux_tag = Keyword("tux").suppress()
@@ -65,7 +131,9 @@ dotted = Literal("d")("dotted").setParseAction(lambda s, l, t: True)
 duration = oneOf("w h q e s t sx").setParseAction(lambda s, l, t: dur_map[t[0]])("duration")
 full_dur = (duration + Optional(dotted) + colon)
 fret = number("fret")
-note = (Optional(full_dur) + fret)
+rest = Literal("r").setParseAction(lambda s, l, t: -1)("fret")
+iso_rest = (Group(Optional(full_dur)) + rest).setParseAction(evalIsolatedRest)
+note = (Optional(full_dur) + (fret | rest))
 
 # Production rules related to groups of notes
 # note_seq := note (dash note)*
@@ -75,12 +143,32 @@ note_seq = Group(note) + ZeroOrMore(dash + Group(note))
 string = number("string")
 phrase = (note_seq + slash + string).setParseAction(evalPhrase)
 
+# Production rules related to chords
+# chord_note := fret slash string
+# chord := full_dur? lparen chord_note+ rparen
+chord_note = (fret + slash + string)
+chord = (Group(Optional(full_dur)) + lparen \
+        + OneOrMore(Group(chord_note)) + rparen).setParseAction(evalChord)
+
 # Scope-related production rules
 # note_env := note_start phrase+
-# staff := staff_start note_env+
-note_env = note_start + OneOrMore(phrase) + newline
-staff = staff_start + newline + OneOrMore(note_env)
+# time_change := time_tag equals number slash number
+# tab_opt := (tab_tag equals tf)?
+# std_opt := (std_tag equals tf)?
+# staff := staff_start staff_opt note_env+
+note_env = note_start + OneOrMore(phrase | chord | iso_rest) + newline
+time_change = (time_tag + equals + number + slash + number \
+        + newline).setParseAction(evalTime)
+tab_opt = Optional(tab_tag + equals + tf, True)("tab")
+std_opt = Optional(std_tag + equals + tf, False)("std")
+staff_opt = tab_opt & std_opt
+staff = (staff_tag + Group(staff_opt) \
+        + OneOrMore(note_env| time_change)).setParseAction(evalStaff)
 
+# production rules for global options
+# pdf_opt := (pdf_tag equals tf)?
+# midi_opt := (midi_tag equals tf)?
+# tux_opt := (tux_tag equals tf)?
 pdf_opt = Optional(pdf_tag + equals + tf + newline, True)("pdf")
 midi_opt = Optional(midi_tag + equals + tf + newline, False)("midi")
 tux_opt = Optional(tux_tag + equals + tf + newline, False)("tux")
