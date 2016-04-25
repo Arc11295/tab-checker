@@ -68,9 +68,16 @@ def evalTime(s, l, t):
 
     return fillDuration
 
+def evalTempo(s, l, t):
+    def fillDuration(duration, dotted):
+        tempo = ir.TempoChange(t.beat, t.bpm)
+        return [tempo], duration, dotted
+
+    return fillDuration
+
 def evalStaff(s, l, t):
     opts = t[0]
-    staff = ir.Staff(tab=opts.tab[0], standard=opts.std[0])
+    staff = ir.Staff(tab=opts.tab[0], standard=opts.std[0], tuning=opts.tune[0])
     notes = []
     dur = 4
     dot = False
@@ -92,7 +99,7 @@ def evalSong(s, l, t):
 bool_map = { "true": True, "false": False }
 dur_map = { "w": 1, "h": 2, "q": 4, "e": 8, "s": 16, "t": 32, "sx": 64 }
 
-# Defining character set
+# Defining keywords and literals
 # tf := "true" | "false"
 # number := {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}+
 # colon := ":"
@@ -113,13 +120,19 @@ lparen = Literal("(").suppress()
 rparen = Literal(")").suppress()
 note_start = Keyword("notes").suppress()
 time_tag = Keyword("time").suppress()
+tempo_tag = Keyword("tempo").suppress()
 staff_tag = Keyword("staff").suppress()
 tab_tag = Keyword("tab").suppress()
-std_tag = Keyword("standard").suppress()
+std_tag = Keyword("notation").suppress()
+tune_tag = Keyword("tuning").suppress()
 pdf_tag = Keyword("pdf").suppress()
 midi_tag = Keyword("midi").suppress()
 tux_tag = Keyword("tux").suppress()
 newline = LineEnd().suppress()
+
+std_tune = Keyword("standard").setParseAction(lambda s, l, t: ir.Song.std_tuning)
+dropd = Keyword("dropd").setParseAction(lambda s, l, t: ir.Song.drop_d)
+tuning = (std_tune | dropd)
 
 # Note-related production rules
 # dotted := "d"
@@ -155,15 +168,18 @@ chord = (Group(Optional(full_dur)) + lparen \
 # time_change := time_tag equals number slash number
 # tab_opt := (tab_tag equals tf)?
 # std_opt := (std_tag equals tf)?
-# staff := staff_start staff_opt note_env+
+# staff := staff_start staff_opt (note_env | time_change | tempo_change)+
 note_env = note_start + OneOrMore(phrase | chord | iso_rest) + newline
 time_change = (time_tag + equals + number + slash + number \
         + newline).setParseAction(evalTime)
+tempo_change = (tempo_tag + colon +  duration("beat") + equals + number("bpm") \
+        + newline).setParseAction(evalTempo)
 tab_opt = Optional(tab_tag + equals + tf, True)("tab")
 std_opt = Optional(std_tag + equals + tf, False)("std")
-staff_opt = tab_opt & std_opt
+tune_opt = Optional(tune_tag + equals + tuning, ir.Song.std_tuning)("tune")
+staff_opt = tab_opt & std_opt & tune_opt
 staff = (staff_tag + Group(staff_opt) \
-        + OneOrMore(note_env| time_change)).setParseAction(evalStaff)
+    + OneOrMore(note_env| time_change |  tempo_change)).setParseAction(evalStaff)
 
 # production rules for global options
 # pdf_opt := (pdf_tag equals tf)?

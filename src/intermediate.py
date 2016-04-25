@@ -10,14 +10,20 @@ class Song(object):
     # the octave BELOW middle C, so we need some constant, and MIDI
     # numbers were a convenient choice.
 
+    std_tuning = (64, 59, 55, 50, 45, 40)
+    drop_d = (64, 59, 55, 50, 45, 38)
+    half_down = (63, 58, 54, 49, 44, 39)
+    whole_down = (62, 57, 53, 48, 43, 38)
+
     lilypond_notes = \
         ("c", "cis", "d", "dis", "e", "f", "fis", "g", "gis", "a", "ais", "b")
 
 
-    def __init__(self, pdf=True, midi=False):
+    def __init__(self, pdf=True, midi=False, bpm=120):
         self._staves = []
         self._pdf = pdf
         self._midi = midi
+        self._bpm = bpm
 
     def add_staff(self, staff):
         assert type(staff) is Staff
@@ -25,6 +31,9 @@ class Song(object):
 
     def num_staves(self):
         return len(self._staves)
+
+    def get_tempo(self):
+        return self._bpm
 
     def lily_str(self):
         """Return the entire song in LilyPond syntax as a string."""
@@ -50,11 +59,22 @@ class Song(object):
         return Template(temp_str).substitute(subs)
 
 
+def _pitch_to_lily(pitch):
+    octave = (pitch - Song.C_2)/12 # This is why we need C_2
+    degree = pitch % 12 # C is 0, B is 11.
+    name = Song.lilypond_notes[degree] # The note's letter name
+
+    if octave < 0:
+        return name + abs(octave)*","
+    else:
+        return name + octave*"'"
+
+
 class Staff(object):
 
-    def __init__(self, tab=True, standard=False):
+    def __init__(self, tab=True, standard=False, tuning=Song.std_tuning):
         self._notes = []
-        self._tuning = (64, 59, 55, 50, 45, 40)
+        self._tuning = tuning
         self._tab = tab
         self._std = standard
 
@@ -84,7 +104,8 @@ class Staff(object):
         else:
             subs["STAFF"] = ""
         if self._tab:
-            subs["TABSTAFF"] = "\\new TabStaff{\\music%c}"%(index + ascii_A)
+            subs["TABSTAFF"] = \
+                "\\new TabStaff %s{\\music%c}"%(self.tune_str(), index + ascii_A)
         else:
             subs["TABSTAFF"] = ""
 
@@ -105,6 +126,11 @@ class Staff(object):
         temp_str = f.read()
         f.close()
         return Template(temp_str).substitute(subs)
+
+    def tune_str(self):
+        note_list = [_pitch_to_lily(p) for p in reversed(self._tuning)]
+        pitches = " ".join(note_list)
+        return "\\with {stringTunings = \\stringTuning <%s>}"%pitches
 
 
 class Chord(object):
@@ -142,6 +168,22 @@ class TimeChange(object):
         return "\\time %d/%d"%(self.get_top(), self.get_bot())
 
 
+class TempoChange(object):
+
+    def __init__(self, beat, bpm):
+        self._beat = beat
+        self._bpm = bpm
+
+    def get_beat(self):
+        return self._beat
+
+    def get_bpm(self):
+        return self._bpm
+
+    def lilypondify(self, tuning):
+        return "\\tempo %d = %d"%(self.get_beat(), self.get_bpm())
+
+
 class Note(object):
 
     values = (1, 2, 4, 8, 16, 32, 64)
@@ -175,13 +217,9 @@ class Note(object):
         """
         if self.get_fret >= 0:
             pitch = self._pitchify(tuning)
-            octave = (pitch - Song.C_2)/12 # This is why we need C_2
-            degree = pitch % 12 # C is 0, B is 11.
-            name = Song.lilypond_notes[degree] # The note's letter name
+            name = _pitch_to_lily(pitch)
         else:
             name = "r" # negative frets correspond to rests here
-            octave = 0 # rests don't really have an octave, but
-            # this way we don't add any ,s or 's after the r
 
         if write_duration:
             duration = self.get_duration()
@@ -196,10 +234,7 @@ class Note(object):
             suff_list.append("\\"+str(string))
         suffix = "".join(suff_list)
 
-        if octave < 0:
-            return name + abs(octave)*"," + suffix
-        else:
-            return name + octave*"'" + suffix
+        return name + suffix
 
     def _pitchify(self, tuning):
         string = self.get_string() - 1
