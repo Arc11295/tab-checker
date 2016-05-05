@@ -1,4 +1,4 @@
-midi=true
+pdf=true
 staff notation=true tuning=standard
     time=4/4
     tempo: q=160
