@@ -3,6 +3,7 @@ from string import Template
 from types import IntType
 
 class Song(object):
+    """a class representing an entire song, containing possibly many staves"""
 
     C_2 = 48
     # Just trust me on this one, ok? It has to do with MIDI numbers and
@@ -19,21 +20,19 @@ class Song(object):
         ("c", "cis", "d", "dis", "e", "f", "fis", "g", "gis", "a", "ais", "b")
 
 
-    def __init__(self, pdf=True, midi=False, bpm=120):
+    def __init__(self, pdf=True, midi=False):
         self._staves = []
         self._pdf = pdf
         self._midi = midi
-        self._bpm = bpm
 
     def add_staff(self, staff):
+        """adds a staff to come after all the staves already in the song"""
         assert type(staff) is Staff
         self._staves.append(staff)
 
     def num_staves(self):
+        """returns the number of staves that have been added to the song"""
         return len(self._staves)
-
-    def get_tempo(self):
-        return self._bpm
 
     def lily_str(self):
         """Return the entire song in LilyPond syntax as a string."""
@@ -53,7 +52,7 @@ class Song(object):
         staves = [staff.staff_str(i) for i, staff in enumerate(self._staves)]
         subs["STAVES"] = "".join(staves)
 
-        f = open("template.ly")
+        f = open("templates/template.ly")
         temp_str = f.read()
         f.close()
         return Template(temp_str).substitute(subs)
@@ -71,6 +70,7 @@ def _pitch_to_lily(pitch):
 
 
 class Staff(object):
+    """a class representing a single staff or guitar part in a song"""
 
     def __init__(self, tab=True, standard=False, tuning=Song.std_tuning):
         self._notes = []
@@ -91,6 +91,7 @@ class Staff(object):
         return len(self._notes)
 
     def staff_str(self, index):
+        """returns the LilyPond code for this staff's layout as a string"""
         ascii_A = ord("A")
         subs = {}
 
@@ -109,12 +110,13 @@ class Staff(object):
         else:
             subs["TABSTAFF"] = ""
 
-        f = open("staff_template.ly")
+        f = open("templates/staff_template.ly")
         temp_str = f.read()
         f.close()
         return Template(temp_str).substitute(subs)
 
     def notes_str(self, index):
+        """returns the LilyPond code for this staff's notes as a string"""
         ascii_A = ord("A")
         subs = {}
 
@@ -122,69 +124,83 @@ class Staff(object):
         note_list = [n.lilypondify(self._tuning)+" " for n in self._notes]
         subs["NOTES"] = "".join(note_list)
 
-        f = open("notes_template.ly")
+        f = open("templates/notes_template.ly")
         temp_str = f.read()
         f.close()
         return Template(temp_str).substitute(subs)
 
     def tune_str(self):
+        """returns the LilyPond code for the guitar tuning for this staff"""
         note_list = [_pitch_to_lily(p) for p in reversed(self._tuning)]
         pitches = " ".join(note_list)
         return "\\with {stringTunings = \\stringTuning <%s>}"%pitches
 
 
 class Chord(object):
+    """a class for representing a chord as played on a guitar"""
 
     def __init__(self):
         self._notes = []
         self._strings = set()
 
     def add_note(self, note):
+        """adds a note to the chord"""
         assert type(note) is Note
         string = note.get_string()
         assert string not in self._strings
+        # ^ guitar chords can't have more than one note to a string
         self._notes.append(note)
         self._strings.add(string)
 
     def lilypondify(self, tuning):
+        """returns this chord in LilyPond syntax as a string"""
         duration = self._notes[0].get_duration()
         notes_list = [n.lilypondify(tuning, False)+" " for n in self._notes]
         return "< " + "".join(notes_list) + ">" + str(duration)
 
 
 class TimeChange(object):
+    """a class representing a time signature change at some point in a song"""
 
     def __init__(self, top, bottom):
         self._top = top
         self._bot = bottom
 
     def get_top(self):
+        """returns the numerator of the time signature changed into."""
         return self._top
 
     def get_bot(self):
+        """returns the denominator of the time signature changed into."""
         return self._bot
 
     def lilypondify(self, tuning):
+        """returns this time signature change in LilyPond syntax as a string"""
         return "\\time %d/%d"%(self.get_top(), self.get_bot())
 
 
 class TempoChange(object):
+    """a class representing a tempo change at some point in a song"""
 
     def __init__(self, beat, bpm):
         self._beat = beat
         self._bpm = bpm
 
     def get_beat(self):
+        """returns the new value (whole, half, quarter, etc.) of a beat"""
         return self._beat
 
     def get_bpm(self):
+        """returns the number of beats per minute"""
         return self._bpm
 
     def lilypondify(self, tuning):
+        """returns this tempo change in LilyPond syntax as a string"""
         return "\\tempo %d = %d"%(self.get_beat(), self.get_bpm())
 
 
 class Note(object):
+    """a class representing a single note as played on a guitar"""
 
     values = (1, 2, 4, 8, 16, 32, 64)
 
@@ -242,6 +258,7 @@ class Note(object):
 
 
 class LilyWriter(object):
+    """a class for writing this intermediate representation to a LilyPond file"""
 
     def __init__(self, song):
         assert type(song) is Song
