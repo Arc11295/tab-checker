@@ -1,6 +1,6 @@
 from parser import *
 
-example_name = "test2.tc"
+example_name = "simple.tc"
 
 s = song.parseFile("./examples/" + example_name)[0]
 
