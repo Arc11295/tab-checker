@@ -1,5 +1,5 @@
 # tab-checker
-I'll be using GNU [LilyPond](lilypond.org) as a backend for PDF/MIDI outputs, and a library provided by [TuxGuitar](www.tuxguitar.com.ar) to output files readable by the application itself.
+I'll be using GNU [LilyPond](lilypond.org) as a backend for PDF/MIDI outputs, and a library provided by [TuxGuitar](www.tuxguitar.com.ar) to output files readable by the application itself. The syntax is mostly taken from another DSL, [VexTab](http://www.vexflow.com/vextab/), but I wrote everything in this repository myself.
 
 ## Requirements
 In order to use this DSL, you need Python 2.7 and the latest version of GNU LilyPond (download Python [here](https://www.python.ord/downloads/) and LilyPond [here](lilypond.org/website/download.html) or use your favorite package manager).
